@@ -86,18 +86,29 @@ st.sidebar.info(f"**Tc** : {Tc_crit:.2f} K\n\n**Pc** : {Pc_crit:.2f} bar\n\n**Vc
 # 3. AFFICHAGE DYNAMIQUE
 # ==========================================
 
+# Limites fixes pour le graphe basées sur les constantes critiques pour éviter les sauts d'échelle
+V_MAX_PLOT = Vc_crit * 6
+P_MAX_PLOT = Pc_crit * 2.5
+
 if mode == "1️⃣ Isotherme Unique (Détaillé)":
     st.title("🔍 Étude d'une Isotherme de Van der Waals")
     
     # Curseur basé sur Tc
-    T = st.slider("Température de l'isotherme (K)", min_value=100.0, max_value=600.0, value=280.0, step=1.0)
+    T = st.slider("Température de l'isotherme (K)", min_value=100.0, max_value=800.0, value=280.0, step=1.0)
     
     resultat = trouver_plateau(T, a, b)
     
+    # Préparation de la figure (toujours affichée)
+    fig = plt.figure(figsize=(12, 7), facecolor='white')
+    V = np.linspace(b*1.05, V_MAX_PLOT, 2000)
+    
+    plt.plot(V, P_ideal(V, T), 'k--', alpha=0.3, label="Gaz Parfait")
+    plt.plot(V, P_vdw(V, T, a, b), 'b-', alpha=0.6, label="Van der Waals")
+
     if resultat:
         P_sat, V_liq, V_mid, V_gaz = resultat
         
-        # Affichage des résultats (métriques d'origine)
+        # Affichage des résultats
         col1, col2, col3 = st.columns(3)
         col1.metric("Pression de Saturation", f"{P_sat:.2f} bar")
         col2.metric("Volume Liquide", f"{V_liq:.4f} L/mol")
@@ -105,36 +116,36 @@ if mode == "1️⃣ Isotherme Unique (Détaillé)":
         
         st.markdown("---")
         
-        # Le Graphe (Style original)
-        fig = plt.figure(figsize=(12, 7), facecolor='white')
-        V = np.linspace(b*1.05, 1.0, 1000)
-        
-        plt.plot(V, P_ideal(V, T), 'k--', alpha=0.3, label="Gaz Parfait")
-        plt.plot(V, P_vdw(V, T, a, b), 'b-', alpha=0.4, label="Van der Waals")
+        # Tracé de la construction de Maxwell
         plt.plot([V_liq, V_gaz], [P_sat, P_sat], 'r-', linewidth=2.5, label=f"Plateau ($P_{{sat}}={P_sat:.2f}$ bar)")
         
-        # Remplissage des aires (Maxwell)
+        # Remplissage des aires
         v_creux = np.linspace(V_mid, V_gaz, 200)
         plt.fill_between(v_creux, P_vdw(v_creux, T, a, b), P_sat, color='green', alpha=0.3, label="Aires égales")
         v_bosse = np.linspace(V_liq, V_mid, 200)
         plt.fill_between(v_bosse, P_vdw(v_bosse, T, a, b), P_sat, color='orange', alpha=0.3)
 
         plt.scatter([V_liq, V_gaz], [P_sat, P_sat], color='black', zorder=10)
-        plt.text(V_liq, P_sat - (P_sat*0.1), '$V_{liq}$', ha='center', color='red', fontsize=12)
-        plt.text(V_gaz, P_sat - (P_sat*0.1), '$V_{gaz}$', ha='center', color='red', fontsize=12)
+        
+        # Décalage dynamique du texte basé sur Pc_crit pour éviter de sortir du cadre
+        offset_y = Pc_crit * 0.05
+        plt.text(V_liq, P_sat - offset_y, '$V_{liq}$', ha='center', color='red', fontsize=12)
+        plt.text(V_gaz, P_sat - offset_y, '$V_{gaz}$', ha='center', color='red', fontsize=12)
 
-        plt.title(f"Construction de Maxwell à {T} K (a={a}, b={b})", fontsize=14, fontweight='bold')
-        plt.xlabel("Volume Molaire (L/mol)")
-        plt.ylabel("Pression (bar)")
-        plt.ylim(0, max(P_sat * 2, 10))
-        plt.xlim(0, 0.8)
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        st.pyplot(fig)
-        
     else:
-        st.error("⚠️ État Supercritique : Pas de transition de phase à cette température.")
+        st.info("ℹ️ État Supercritique : Le fluide est dans une phase unique, il n'y a pas de transition d'état liquide/vapeur à cette température.")
+        st.markdown("---")
+
+    # Configuration des axes fixes
+    plt.title(f"Isotherme à {T} K (a={a}, b={b})", fontsize=14, fontweight='bold')
+    plt.xlabel("Volume Molaire (L/mol)")
+    plt.ylabel("Pression (bar)")
+    plt.xlim(0, V_MAX_PLOT)
+    plt.ylim(0, P_MAX_PLOT)
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    st.pyplot(fig)
 
 elif mode == "2️⃣ Plage de Températures (Cloche)":
     st.title("📈 Diagramme de Phase Complet (Courbe Binodale)")
@@ -171,10 +182,10 @@ elif mode == "2️⃣ Plage de Températures (Cloche)":
     p_sat_list.append(Pc_crit)
 
     fig2 = plt.figure(figsize=(12, 8), facecolor='white')
-    V_plot = np.linspace(b + 0.005, 1.0, 500)
+    V_plot = np.linspace(b + 0.005, V_MAX_PLOT, 1000)
     
     # 1. Isothermes (Bleu acier)
-    T_reseau = np.arange(T_min, Tc_crit * 1.3, pas_T)
+    T_reseau = np.arange(T_min, Tc_crit * 1.5, pas_T)
     for T_iso in T_reseau:
         plt.plot(V_plot, P_vdw(V_plot, T_iso, a, b), color='steelblue', alpha=0.3, lw=1.2)
     
@@ -189,12 +200,15 @@ elif mode == "2️⃣ Plage de Températures (Cloche)":
 
     # 4. Point Critique (Étoile dorée)
     plt.scatter(Vc_crit, Pc_crit, color='gold', s=300, marker='*', edgecolor='black', zorder=15, label='POINT CRITIQUE')
+    
+    offset_y = Pc_crit * 0.05
     plt.annotate(f"C ({Pc_crit:.1f} bar, {Vc_crit:.3f} L/mol)", 
-                 xy=(Vc_crit, Pc_crit), xytext=(Vc_crit+0.05, Pc_crit+5),
+                 xy=(Vc_crit, Pc_crit), xytext=(Vc_crit+0.05, Pc_crit + offset_y),
                  arrowprops=dict(facecolor='black', shrink=0.05, width=1))
 
-    plt.ylim(0, Pc_crit * 2)
-    plt.xlim(0, 0.8)
+    # Configuration des axes fixes
+    plt.xlim(0, V_MAX_PLOT)
+    plt.ylim(0, P_MAX_PLOT)
     plt.xlabel("Volume molaire $V$ (L/mol)")
     plt.ylabel("Pression $P$ (bar)")
     plt.title(f"Diagramme (P,V) de {T_min} K à {T_max} K", fontweight='bold')
@@ -206,7 +220,7 @@ elif mode == "2️⃣ Plage de Températures (Cloche)":
     # Tableau de données
     st.subheader("📊 Données de saturation")
     df = pd.DataFrame({
-        'T (K)': np.round(t_valides_list, 1), # Utilisation de la liste filtrée
+        'T (K)': np.round(t_valides_list, 1),
         'P_sat (bar)': np.round(p_sat_list, 2),
         'V_liq': np.round(v_liq_list, 4),
         'V_gaz': np.round(v_gaz_list, 4)
